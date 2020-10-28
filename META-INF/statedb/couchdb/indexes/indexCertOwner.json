@@ -1,0 +1,11 @@
+{
+  "index": {
+    "fields": [
+      "docType",
+      "certOwner"
+    ]
+  },
+  "ddoc": "indexCertOwnerDoc",
+  "name": "indexCertOwner",
+  "type": "json"
+}
