@@ -3,11 +3,11 @@
 Fabcar-advanced contains the implementation of a smart contract that showcases various features of [Hyperledger Fabric](https://www.hyperledger.org/use/fabric).
 It is loosely based on the [sample of the same name](https://github.com/hyperledger/fabric-samples/blob/master/chaincode/fabcar/typescript/src/fabcar.ts), but contains several additional transactions and checks to allow it to be run in a shared environment.
 
-The smart contract is intended for use by the [drivenet network](https://fabnetworks.org), and demonstrated by the *Joining a Network* tutorials that form part of the [IBM Blockchain Platform VS Code extension](https://marketplace.visualstudio.com/items?itemName=IBMBlockchain.ibm-blockchain-platform). It is recommended that you follow these tutorials to find out how this contract is used.
+The smart contract is intended for use by the [drivenet network](https://fabnetworks.org/networks/DriveNet) which is listed on the network registry hosted at [fabnetworks.org](https://fabnetworks.org), and demonstrated by the *Joining a Network* tutorials that form part of the [IBM Blockchain Platform VS Code extension](https://marketplace.visualstudio.com/items?itemName=IBMBlockchain.ibm-blockchain-platform). It is recommended that you follow these tutorials to find out how this contract is used.
 
 The smart contract is written in Typescript and compatible with Hyperledger Fabric 1.4 and above. The entry point can be found in [src/fabcar.ts](./src/fabcar.ts).
 
-Fabcar is under active development and the team welcomes your feedback. If you have any questions or comments please contact us: blockchain@uk.ibm.com
+Fabcar-advanced is under active development and the team welcomes your feedback. If you have any questions, comments or suggestions for future features please create [issues and suggestions on Github](https://github.com/m-g-k/fabcar-advanced/issues). For any questions please [create a question on Stack Overflow](http://ibm.biz/fabnetso).
 
 This package uses the Apache-2.0 license.
 
