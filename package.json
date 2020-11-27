@@ -1,6 +1,6 @@
 {
     "name": "fabcar",
-    "version": "1.0.87",
+    "version": "1.0.97",
     "description": "FabCar contract",
     "main": "dist/index.js",
     "typings": "dist/index.d.ts",

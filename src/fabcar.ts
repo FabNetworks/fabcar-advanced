@@ -4,7 +4,8 @@
 import { Context, Contract, Info, Returns, Transaction } from 'fabric-contract-api';
 import { ClientIdentity, Iterators } from 'fabric-shim';
 import { Car } from './car';
-import { ChangeOwnerEvent } from './changeCarOwner';
+import { ChangeOwnerEvent } from './changeCarOwnerEvent';
+import { ChangeColorEvent } from './changeCarColorEvent';
 import { CreateCarEvent } from './createCarEvent';
 import { DeleteCarEvent } from './deleteCarEvent';
 import { PreviousOwnersResult } from './previousOwners';
@@ -153,6 +154,10 @@ export class FabCar extends Contract
       }
     }
 
+    if (!carOwner) {
+      throw new Error(`The query cannot be made as the 'carOwner' parameter is empty.`);
+    }
+
     // construct the query we need
     const query = {
       selector: {
@@ -165,7 +170,7 @@ export class FabCar extends Contract
       ],
     };
 
-    console.log('****QUERY: ', query);
+    // console.log('****QUERY: ', query);
 
     // issue the query
     const iterator = await ctx.stub.getQueryResult(JSON.stringify(query));
@@ -263,7 +268,7 @@ export class FabCar extends Contract
           queryIndexName,
         ],
       };
-      console.log('****QUERY: ', query);
+      // console.log('****QUERY: ', query);
 
       // finally issue the query
       iterator = await ctx.stub.getQueryResult(JSON.stringify(query));
@@ -313,7 +318,7 @@ export class FabCar extends Contract
       ],
     };
 
-    console.log('****QUERY: ', query);
+    // console.log('****QUERY: ', query);
 
     // issue the query
     const iterator = await ctx.stub.getQueryResult(JSON.stringify(query));
@@ -348,6 +353,22 @@ export class FabCar extends Contract
 
     // Check to see if we have reached the limit on the total number of cars a single user can create or own
     await Utils.checkForMaxCars(carNumber, clientCertId, cid, ctx); // this will throw if not ok
+
+    if (!make) {
+      throw new Error(`The car ${carNumber} cannot be created as the 'make' parameter is empty.`);
+    }
+
+    if (!model) {
+      throw new Error(`The car ${carNumber} cannot be created as the 'model' parameter is empty.`);
+    }
+
+    if (!color) {
+      throw new Error(`The car ${carNumber} cannot be created as the 'color' parameter is empty.`);
+    }
+
+    if (!owner) {
+      throw new Error(`The car ${carNumber} cannot be created as the 'owner' parameter is empty.`);
+    }
 
     const car: Car = {
       certOwner: clientCertId,
@@ -434,6 +455,14 @@ export class FabCar extends Contract
     const car = JSON.parse(buffer.toString()) as Car;
     const carCertId = car.certOwner;
 
+    if (!newOwner) {
+      throw new Error(`The ownership of car ${carNumber} cannot be changed as the 'newOwner' parameter is empty.`);
+    }
+
+    if (car.owner.toLowerCase() === newOwner.toLowerCase()) {
+      throw new Error(`The ownership of car ${carNumber} cannot be changed as the current owner '${car.owner}' and the new owner are the same.`);
+    }
+
     // get the client ID so we can make sure they are allowed to modify the car
     const cid = new ClientIdentity(ctx.stub);
     const clientCertId = cid.getID();
@@ -478,6 +507,73 @@ export class FabCar extends Contract
   }
 
   @Transaction()
+  public async resprayCar(ctx: Context, carNumber: string, newColor: string)
+  {
+    console.info('============= START : resprayCar ===========');
+
+    const exists = await this.carExists(ctx, carNumber);
+    if (!exists) {
+      throw new Error(`The car ${carNumber} does not exist.`);
+    }
+
+
+    // get the car we want to modify and the current certOwner from it
+    const buffer = await ctx.stub.getState(carNumber); // get the car from chaincode state
+    const car = JSON.parse(buffer.toString()) as Car;
+    const carCertId = car.certOwner;
+
+    if (!newColor) {
+      throw new Error(`The car ${carNumber} cannot be resprayed as the 'newColor' parameter is empty and we are out of invisible paint :-)`);
+    }
+    
+    if (car.color.toLowerCase() === newColor.toLowerCase()) {
+      throw new Error(`The color of car ${carNumber} cannot be changed as the current color '${car.color}' and the new color are the same.`);
+    }
+
+    // get the client ID so we can make sure they are allowed to modify the car
+    const cid = new ClientIdentity(ctx.stub);
+    const clientCertId = cid.getID();
+
+    // the rule is to be able to modify a car you must be the current certOwner for it
+    // which usually means you are the creater of it or have had it transfered to your FabricUserID (CN)
+    if (carCertId !== clientCertId) {
+
+      // we are not the certOwner for it, but see if it has been transfered to us via a
+      // changeCarOwner() transaction - which means we check our CN against the current external owner
+      const clientCN = Utils.extractCN(clientCertId);
+      if (clientCN !== car.owner) {
+        // special case IBM Org which can take ownership of anything
+        const msp = cid.getMSPID();
+        if (msp !== 'IBMMSP') {
+          const carCN = Utils.extractCN(carCertId);
+          throw new Error(`The color of car ${carNumber} cannot be changed. User ${clientCN} not authorised to change a car owned by ${carCN}.`);
+        }
+      } else {
+        // as the car has been transfered to us, we need to take "full" ownership of it
+        // this prevents the previous owner deleting it for example. IBM Org does not need to do this!
+
+        // but first make sure we do not already have too many cars
+        await Utils.checkForMaxCars(carNumber, clientCertId, cid, ctx, true); // this will throw if not ok
+        car.certOwner = clientCertId;
+      }
+    }
+
+    // set the new color into the car
+    const previousColor = car.color;
+    car.color = newColor;
+
+    // put the car into the RWSET for adding to the ledger
+    await ctx.stub.putState(carNumber, Buffer.from(JSON.stringify(car)));
+
+    // emit an event to inform listeners that a car has had its color changed
+    const txDate = TimestampMapper.toDate(ctx.stub.getTxTimestamp());
+    const changecolorEvent = new ChangeColorEvent(carNumber, previousColor, newColor, txDate);
+    ctx.stub.setEvent(changecolorEvent.docType, Buffer.from(JSON.stringify(changecolorEvent)));
+
+    console.info('============= END : resprayCar ===========');
+  }
+
+  @Transaction()
   @Returns('PreviousOwnersResult')
   public async getPreviousOwners(ctx: Context, carNumber: string): Promise<PreviousOwnersResult>
   {
@@ -493,41 +589,65 @@ export class FabCar extends Contract
     const previousOwners: string[] = [];
     const previousOwnershipChangeDates: Date[] = [];
     let previousOwnerCount = 0;
-    let currentOwner: string = '';
+    let previousOwner = '';
+    let previousCertOwner = '';
+    let currentOwner = '';
     let currentOwnershipChangeDate: Date = new Date();
     let first = true;
     while (true) {
       const res = await historyIterator.next();
       if (res.value) {
-        let result: string;
+        let currentCarOwner = '';
+        let currentCarCertOwner = '';
         const txnTs = res.value.getTimestamp();
         const txnDate = TimestampMapper.toDate(txnTs);
         if (res.value.is_delete) {
-          result = 'CAR KEY DELETED';
+          currentCarOwner = 'CAR KEY DELETED';
         } else {
           // console.log(res.value.value.toString('utf8'));
           try {
             const car = JSON.parse(res.value.value.toString('utf8')) as Car;
-            result = car.owner;
+            currentCarOwner = car.owner;
+            currentCarCertOwner = car.certOwner ? car.certOwner : ''; // there will always be a certOwner
           } catch (err) {
-            console.log(err);
             // result = 'Invalid JSON';
             console.log(err);
             throw new Error(`The car ${carNumber} has an invalid JSON record ${res.value.value.toString('utf8')}.`);
           }
         }
+
         if (first) {
           // keep current owner out of previousOwner list and count.
           // this relies on the car existing (so not being a deleted car for current owner)
-          // but as we always check that the car exists first that should not be a problem
-          currentOwner = result;
+          // but as we always check that the carExists() first that should not be a problem
+          currentOwner = currentCarOwner;
           currentOwnershipChangeDate = txnDate;
           first = false;
         } else {
-          ++previousOwnerCount;
-          previousOwners.push(result);
-          previousOwnershipChangeDates.push(txnDate);
+          let includeTxn = true;
+          // bounce over deletes as we keep those in the list...
+          if (!res.value.is_delete) {
+            // we start checking on the second (and subsequent) time through so we aways have previous details
+            if ((previousCertOwner !== currentCarCertOwner && previousOwner === currentCarOwner) ||
+              (previousCertOwner === currentCarCertOwner && previousOwner === currentCarOwner)) {
+              // this indicates this txn was followed by a ConfirmTransfer txn or was a different type of
+              // none ownership transfering txn such as a resprayCar txn which means we keep this one
+              // out of the previous owners lists as otherwise it looks like a duplicate transfer happened.
+              includeTxn = false;
+              console.log('Skipping txn: ', previousOwnerCount, currentCarOwner, txnDate.toString());
+            }
+          }
+
+          if (includeTxn) {
+            ++previousOwnerCount;
+            previousOwners.push(currentCarOwner);
+            previousOwnershipChangeDates.push(txnDate);
+          }
         }
+
+        // store for next iteration
+        previousOwner = currentCarOwner;
+        previousCertOwner = currentCarCertOwner;
       }
       if (res.done) {
         // console.log('end of data');
