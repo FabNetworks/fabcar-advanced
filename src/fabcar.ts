@@ -525,7 +525,7 @@ export class FabCar extends Contract
     if (!newColor) {
       throw new Error(`The car ${carNumber} cannot be resprayed as the 'newColor' parameter is empty and we are out of invisible paint :-)`);
     }
-    
+
     if (car.color.toLowerCase() === newColor.toLowerCase()) {
       throw new Error(`The color of car ${carNumber} cannot be changed as the current color '${car.color}' and the new color are the same.`);
     }
